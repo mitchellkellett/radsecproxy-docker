@@ -1,5 +1,5 @@
 # Use official Alpine release
-FROM alpine:latest as build
+FROM alpine:3.14.3 as build
 
 ARG RADSECVERSION
 ENV RADSECURL https://github.com/radsecproxy/radsecproxy/releases/download/${RADSECVERSION}/
@@ -32,7 +32,7 @@ RUN make && make install
 # --- --- ---
 
 # Create Radsecproxy container
-FROM alpine:latest
+FROM alpine:3.14.3
 
 # Update apk
 RUN apk update
