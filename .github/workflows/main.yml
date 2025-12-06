@@ -1,0 +1,131 @@
+name: Build radsecproxy Docker Image
+on:
+  # schedule:
+  #   - cron: '0 * * * *'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/radsecproxy
+
+jobs:
+  check-releases:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      latest: ${{ steps.set-matrix.outputs.latest }}
+    steps:
+      - name: Get all radsecproxy releases
+        id: set-matrix
+        run: |
+          # Get latest release
+          LATEST=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases/latest | jq -r '.tag_name')
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "Latest release: $LATEST"
+          
+          # Get all releases
+          RELEASES=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases | jq -r '.[].tag_name')
+          
+          # Check which ones don't have images yet
+          MISSING=()
+          for version in $RELEASES; do
+            if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version} >/dev/null 2>&1; then
+              MISSING+=("\"$version\"")
+              echo "Missing image for version: $version"
+            else
+              echo "Image exists for version: $version"
+            fi
+          done
+          
+          # Create JSON array for matrix
+          if [ ${#MISSING[@]} -eq 0 ]; then
+            echo "matrix={\"version\":[]}" >> $GITHUB_OUTPUT
+            echo "No missing versions found"
+          else
+            MATRIX=$(printf '%s\n' "${MISSING[@]}" | jq -s -c '{version: .}')
+            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+            echo "Found missing versions: ${MISSING[@]}"
+          fi
+
+  build:
+    needs: check-releases
+    if: needs.check-releases.outputs.matrix != '{"version":[]}'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    strategy:
+      matrix: ${{fromJson(needs.check-releases.outputs.matrix)}}
+      fail-fast: false
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Parse version tags
+        id: tags
+        run: |
+          VERSION="${{ matrix.version }}"
+          LATEST="${{ needs.check-releases.outputs.latest }}"
+          
+          # Remove 'v' prefix if present
+          VERSION_NUM=${VERSION#v}
+          
+          # Split version into parts
+          IFS='.' read -ra PARTS <<< "$VERSION_NUM"
+          MAJOR="${PARTS[0]}"
+          MINOR="${PARTS[1]}"
+          PATCH="${PARTS[2]}"
+          
+          echo "full=v${VERSION_NUM}" >> $GITHUB_OUTPUT
+          echo "minor=v${MAJOR}.${MINOR}" >> $GITHUB_OUTPUT
+          echo "major=v${MAJOR}" >> $GITHUB_OUTPUT
+          echo "version_num=${VERSION_NUM}" >> $GITHUB_OUTPUT
+          
+          # Check if this is the latest version
+          if [ "$VERSION" == "$LATEST" ]; then
+            echo "is_latest=true" >> $GITHUB_OUTPUT
+            echo "This is the latest version - will tag as 'latest'"
+          else
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+            echo "Not the latest version - skipping 'latest' tag"
+          fi
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push (latest)
+        if: steps.tags.outputs.is_latest == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            RADSECVERSION=${{ steps.tags.outputs.version_num }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      
+      - name: Build and push (not latest)
+        if: steps.tags.outputs.is_latest == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            RADSECVERSION=${{ steps.tags.outputs.version_num }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}
