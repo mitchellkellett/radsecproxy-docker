@@ -192,7 +192,7 @@ jobs:
       - name: Delete untagged images
         uses: actions/delete-package-versions@v5
         with:
-          package-name: radsecproxy
+          package-name: radsecproxy-docker/radsecproxy
           package-type: container
           min-versions-to-keep: 0
           delete-only-untagged-versions: true
