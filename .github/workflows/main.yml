@@ -29,6 +29,20 @@ jobs:
           # Check which ones don't have images yet
           MISSING=()
           for version in $RELEASES; do
+            # Remove 'v' prefix if present for comparison
+            VERSION_NUM=${version#v}
+            
+            # Split version into parts
+            IFS='.' read -ra PARTS <<< "$VERSION_NUM"
+            MAJOR="${PARTS[0]}"
+            MINOR="${PARTS[1]}"
+            
+            # Skip versions before 1.9
+            if [ "$MAJOR" -lt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 9 ]); then
+              echo "Skipping version $version (before 1.9)"
+              continue
+            fi
+            
             if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version} >/dev/null 2>&1; then
               MISSING+=("\"$version\"")
               echo "Missing image for version: $version"
@@ -61,6 +75,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Get release metadata
+        id: release
+        run: |
+          VERSION="${{ matrix.version }}"
+          
+          # Fetch release data from GitHub API
+          RELEASE_DATA=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases/tags/${VERSION})
+          
+          # Extract body and escape for use in labels
+          BODY=$(echo "$RELEASE_DATA" | jq -r '.body // ""')
+          
+          # Save to output (using heredoc to handle multiline)
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Also get the release URL
+          RELEASE_URL=$(echo "$RELEASE_DATA" | jq -r '.html_url // ""')
+          echo "url=$RELEASE_URL" >> $GITHUB_OUTPUT
       
       - name: Parse version tags
         id: tags
@@ -115,6 +149,13 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.title=radsecproxy
+            org.opencontainers.image.description=${{ steps.release.outputs.description }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.full }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=${{ steps.release.outputs.url }}
+            org.opencontainers.image.revision=${{ github.sha }}
       
       - name: Build and push (not latest)
         if: steps.tags.outputs.is_latest == 'false'
@@ -129,3 +170,25 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}
+          labels: |
+            org.opencontainers.image.title=radsecproxy
+            org.opencontainers.image.description=${{ steps.release.outputs.description }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.full }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=${{ steps.release.outputs.url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  cleanup:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete untagged images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.repository }}/radsecproxy
+          package-type: container
+          min-versions-to-keep: 0
+          delete-only-untagged-versions: true
