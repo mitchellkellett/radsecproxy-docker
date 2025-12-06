@@ -29,6 +29,12 @@ jobs:
           # Check which ones don't have images yet
           MISSING=()
           for version in $RELEASES; do
+            # Skip the oddly-named release
+            if [ "$version" == "radsecproxy-1.6.9" ]; then
+              echo "Skipping oddly-named version: $version"
+              continue
+            fi
+            
             # Remove 'v' prefix if present for comparison
             VERSION_NUM=${version#v}
             
@@ -84,13 +90,10 @@ jobs:
           # Fetch release data from GitHub API
           RELEASE_DATA=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases/tags/${VERSION})
           
-          # Extract body and escape for use in labels
-          BODY=$(echo "$RELEASE_DATA" | jq -r '.body // ""')
+          # Extract body and sanitize for use in labels
+          BODY=$(echo "$RELEASE_DATA" | jq -r '.body // ""' | tr '\r\n' ' ' | tr -s ' ' | head -c 500)
           
-          # Save to output (using heredoc to handle multiline)
-          echo "description<<EOF" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "description=$BODY" >> $GITHUB_OUTPUT
           
           # Also get the release URL
           RELEASE_URL=$(echo "$RELEASE_DATA" | jq -r '.html_url // ""')
