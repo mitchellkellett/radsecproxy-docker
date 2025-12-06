@@ -9,6 +9,19 @@ env:
   IMAGE_NAME: ${{ github.repository }}/radsecproxy
 
 jobs:
+  initial-cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+        - name: Clean up untagged images
+          uses: actions/delete-package-versions@v5
+          with:
+            package-name: radsecproxy-docker/radsecproxy
+            package-type: container
+            min-versions-to-keep: 0
+            delete-only-untagged-versions: true
+            
   check-versions:
     runs-on: ubuntu-latest
     permissions:
@@ -17,6 +30,9 @@ jobs:
       versions: ${{ steps.get-versions.outputs.versions }}
       latest: ${{ steps.get-versions.outputs.latest }}
     steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
@@ -32,8 +48,9 @@ jobs:
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "Latest stable release: $LATEST"
           
-          # Get all releases and sort them in version order
-          RELEASES=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases | jq -r '.[].tag_name' | sort -V)
+          # Get all releases sorted by published date (oldest first)
+          RELEASES=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases | \
+            jq -r 'sort_by(.published_at) | .[].tag_name')
           
           # Check which ones are missing
           MISSING=()
@@ -47,7 +64,7 @@ jobs:
             # Remove 'v' prefix if present
             VERSION_NUM=${version#v}
             
-            # Split version into parts (before any pre-release suffix)
+            # Get base version (strip pre-release suffix)
             BASE_VERSION=$(echo "$VERSION_NUM" | sed 's/-.*$//')
             IFS='.' read -ra PARTS <<< "$BASE_VERSION"
             MAJOR="${PARTS[0]}"
@@ -59,12 +76,13 @@ jobs:
               continue
             fi
             
-            # Check if image already exists
-            echo "Checking for: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${VERSION_NUM}"
-            if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${VERSION_NUM} >/dev/null 2>&1; then
-              echo "✓ Exists: v${VERSION_NUM}"
+            # Check if image exists using buildx imagetools
+            TAG="v${VERSION_NUM}"
+            echo "Checking for: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
+            if docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG} >/dev/null 2>&1; then
+              echo "✓ Exists: ${TAG}"
             else
-              echo "✗ Missing: v${VERSION_NUM}"
+              echo "✗ Missing: ${TAG}"
               MISSING+=("\"$version\"")
             fi
           done
