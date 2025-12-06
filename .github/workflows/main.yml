@@ -11,16 +11,26 @@ env:
 jobs:
   check-versions:
     runs-on: ubuntu-latest
+    permissions:
+      packages: read
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
       latest: ${{ steps.get-versions.outputs.latest }}
     steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Get missing versions
         id: get-versions
         run: |
-          # Get latest release
+          # Get latest stable release (excludes pre-releases)
           LATEST=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases/latest | jq -r '.tag_name')
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "Latest stable release: $LATEST"
           
           # Get all releases and sort them in version order
           RELEASES=$(curl -s https://api.github.com/repos/radsecproxy/radsecproxy/releases | jq -r '.[].tag_name' | sort -V)
@@ -30,24 +40,31 @@ jobs:
           for version in $RELEASES; do
             # Skip the oddly-named release
             if [ "$version" == "radsecproxy-1.6.9" ]; then
+              echo "Skipping: $version"
               continue
             fi
             
             # Remove 'v' prefix if present
             VERSION_NUM=${version#v}
             
-            # Split version into parts
-            IFS='.' read -ra PARTS <<< "$VERSION_NUM"
+            # Split version into parts (before any pre-release suffix)
+            BASE_VERSION=$(echo "$VERSION_NUM" | sed 's/-.*$//')
+            IFS='.' read -ra PARTS <<< "$BASE_VERSION"
             MAJOR="${PARTS[0]}"
             MINOR="${PARTS[1]}"
             
             # Skip versions before 1.9
             if [ "$MAJOR" -lt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -lt 9 ]); then
+              echo "Skipping (< 1.9): $version"
               continue
             fi
             
             # Check if image already exists
-            if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${VERSION_NUM} >/dev/null 2>&1; then
+            echo "Checking for: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${VERSION_NUM}"
+            if docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${VERSION_NUM} >/dev/null 2>&1; then
+              echo "✓ Exists: v${VERSION_NUM}"
+            else
+              echo "✗ Missing: v${VERSION_NUM}"
               MISSING+=("\"$version\"")
             fi
           done
@@ -55,9 +72,11 @@ jobs:
           # Create JSON array
           if [ ${#MISSING[@]} -eq 0 ]; then
             echo "versions=[]" >> $GITHUB_OUTPUT
+            echo "No missing versions found!"
           else
             VERSIONS=$(printf '%s\n' "${MISSING[@]}" | jq -s -c '.')
             echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
+            echo "Missing versions: ${MISSING[@]}"
           fi
 
   build-version:
@@ -96,7 +115,18 @@ jobs:
           LATEST="${{ needs.check-versions.outputs.latest }}"
           
           VERSION_NUM=${VERSION#v}
-          IFS='.' read -ra PARTS <<< "$VERSION_NUM"
+          
+          # Check if this is a pre-release
+          if [[ "$VERSION_NUM" =~ -(rc|beta|alpha) ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "This is a pre-release version"
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Get base version (strip pre-release suffix)
+          BASE_VERSION=$(echo "$VERSION_NUM" | sed 's/-.*$//')
+          IFS='.' read -ra PARTS <<< "$BASE_VERSION"
           MAJOR="${PARTS[0]}"
           MINOR="${PARTS[1]}"
           PATCH="${PARTS[2]}"
@@ -106,8 +136,10 @@ jobs:
           echo "major=v${MAJOR}" >> $GITHUB_OUTPUT
           echo "version_num=${VERSION_NUM}" >> $GITHUB_OUTPUT
           
+          # Check if this is the latest stable release
           if [ "$VERSION" == "$LATEST" ]; then
             echo "is_latest=true" >> $GITHUB_OUTPUT
+            echo "This is the latest stable release"
           else
             echo "is_latest=false" >> $GITHUB_OUTPUT
           fi
@@ -122,8 +154,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push (latest)
-        if: steps.tags.outputs.is_latest == 'true'
+      - name: Build and push (latest stable)
+        if: steps.tags.outputs.is_latest == 'true' && steps.tags.outputs.is_prerelease == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -144,8 +176,8 @@ jobs:
             org.opencontainers.image.url=${{ steps.release.outputs.url }}
             org.opencontainers.image.revision=${{ github.sha }}
       
-      - name: Build and push (not latest)
-        if: steps.tags.outputs.is_latest == 'false'
+      - name: Build and push (stable - not latest)
+        if: steps.tags.outputs.is_latest == 'false' && steps.tags.outputs.is_prerelease == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -157,6 +189,25 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}
+          labels: |
+            org.opencontainers.image.title=radsecproxy
+            org.opencontainers.image.description=${{ steps.release.outputs.description }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.full }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=${{ steps.release.outputs.url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      
+      - name: Build and push (pre-release)
+        if: steps.tags.outputs.is_prerelease == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            RADSECVERSION=${{ steps.tags.outputs.version_num }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
           labels: |
             org.opencontainers.image.title=radsecproxy
             org.opencontainers.image.description=${{ steps.release.outputs.description }}
