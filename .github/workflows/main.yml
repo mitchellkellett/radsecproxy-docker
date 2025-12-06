@@ -49,11 +49,12 @@ jobs:
               continue
             fi
             
-            if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version} >/dev/null 2>&1; then
+            # Check for image with v prefix (matching our tag format)
+            if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${VERSION_NUM} >/dev/null 2>&1; then
               MISSING+=("\"$version\"")
               echo "Missing image for version: $version"
             else
-              echo "Image exists for version: $version"
+              echo "Image exists for version: v$VERSION_NUM"
             fi
           done
           
@@ -191,7 +192,7 @@ jobs:
       - name: Delete untagged images
         uses: actions/delete-package-versions@v5
         with:
-          package-name: ${{ github.repository }}/radsecproxy
+          package-name: radsecproxy
           package-type: container
           min-versions-to-keep: 0
           delete-only-untagged-versions: true
