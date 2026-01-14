@@ -253,10 +253,10 @@ jobs:
             org.opencontainers.image.url=${{ steps.release.outputs.url }}
             org.opencontainers.image.revision=${{ github.sha }}
       
-      - name: Clean up untagged images
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: ${{ github.event.repository.name }}/radsecproxy
-          package-type: container
-          min-versions-to-keep: 0
-          delete-only-untagged-versions: true
+      # - name: Clean up untagged images
+      #   uses: actions/delete-package-versions@v5
+      #   with:
+      #     package-name: ${{ github.event.repository.name }}/radsecproxy
+      #     package-type: container
+      #     min-versions-to-keep: 0
+      #     delete-only-untagged-versions: true
