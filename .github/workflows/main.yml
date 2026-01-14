@@ -23,7 +23,7 @@ jobs:
             delete-only-untagged-versions: true
             
   check-versions:
-    # needs: initial-cleanup
+    needs: initial-cleanup
     runs-on: ubuntu-latest
     permissions:
       packages: read
