@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       packages: write
+    continue-on-error: true
     steps:
         - name: Clean up untagged images
           uses: actions/delete-package-versions@v5
@@ -189,12 +190,19 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
           labels: |
             org.opencontainers.image.title=radsecproxy
-            org.opencontainers.image.description=${{ steps.release.outputs.description }}
+            org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
             org.opencontainers.image.version=${{ steps.tags.outputs.full }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.url=${{ steps.release.outputs.url }}
             org.opencontainers.image.revision=${{ github.sha }}
-      
+          annotations: |
+            org.opencontainers.image.title=radsecproxy
+            org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
+            org.opencontainers.image.version=${{ steps.tags.outputs.full }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=${{ steps.release.outputs.url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
       - name: Build and push (stable - not latest)
         if: steps.tags.outputs.is_latest == 'false' && steps.tags.outputs.is_prerelease == 'false'
         uses: docker/build-push-action@v5
@@ -210,12 +218,19 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
           labels: |
             org.opencontainers.image.title=radsecproxy
-            org.opencontainers.image.description=${{ steps.release.outputs.description }}
+            org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
             org.opencontainers.image.version=${{ steps.tags.outputs.full }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.url=${{ steps.release.outputs.url }}
             org.opencontainers.image.revision=${{ github.sha }}
-      
+          annotations: |
+            org.opencontainers.image.title=radsecproxy
+            org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
+            org.opencontainers.image.version=${{ steps.tags.outputs.full }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=${{ steps.release.outputs.url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
       - name: Build and push (pre-release)
         if: steps.tags.outputs.is_prerelease == 'true'
         uses: docker/build-push-action@v5
