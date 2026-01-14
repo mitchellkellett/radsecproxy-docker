@@ -190,14 +190,14 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
           labels: |
             org.opencontainers.image.title=radsecproxy
-            org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
+            org.opencontainers.image.description=radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS.
             org.opencontainers.image.version=${{ steps.tags.outputs.full }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.url=${{ steps.release.outputs.url }}
             org.opencontainers.image.revision=${{ github.sha }}
           annotations: |
             index:org.opencontainers.image.title=radsecproxy
-            index:org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
+            index:org.opencontainers.image.description=radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS.
             index:org.opencontainers.image.version=${{ steps.tags.outputs.full }}
             index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
             index:org.opencontainers.image.url=${{ steps.release.outputs.url }}
@@ -218,14 +218,14 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.minor }}
           labels: |
             org.opencontainers.image.title=radsecproxy
-            org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
+            org.opencontainers.image.description=radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS.
             org.opencontainers.image.version=${{ steps.tags.outputs.full }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.url=${{ steps.release.outputs.url }}
             org.opencontainers.image.revision=${{ github.sha }}
           annotations: |
             index:org.opencontainers.image.title=radsecproxy
-            index:org.opencontainers.image.description="radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS."
+            index:org.opencontainers.image.description=radsecproxy is a generic RADIUS proxy that in addition to usual RADIUS UDP transport, also supports TLS (RadSec), as well as RADIUS over TCP and DTLS.
             index:org.opencontainers.image.version=${{ steps.tags.outputs.full }}
             index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
             index:org.opencontainers.image.url=${{ steps.release.outputs.url }}
